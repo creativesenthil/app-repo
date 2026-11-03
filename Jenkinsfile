@@ -1,4 +1,3 @@
-```groovy
 def notifySlack(String msg) {
   withCredentials([string(credentialsId: 'slack-webhook', variable: 'HOOK')]) {
     withEnv(["MSG=${msg}"]) {
@@ -110,4 +109,3 @@ pipeline {
     }
   }
 }
-```
