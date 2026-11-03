@@ -1,3 +1,4 @@
+```groovy
 def notifySlack(String msg) {
   withCredentials([string(credentialsId: 'slack-webhook', variable: 'HOOK')]) {
     withEnv(["MSG=${msg}"]) {
@@ -12,14 +13,20 @@ def notifySlack(String msg) {
 
 pipeline {
   agent any
+
   options {
     timestamps()
     timeout(time: 30, unit: 'MINUTES')
   }
+
   stages {
+
     stage('Build (Maven)') {
-      steps { sh 'mvn -B clean package -DskipTests' }
+      steps {
+        sh 'mvn -B clean package -DskipTests'
+      }
     }
+
     stage('SonarQube Analysis') {
       steps {
         withSonarQubeEnv('sonar') {
@@ -27,6 +34,7 @@ pipeline {
         }
       }
     }
+
     stage('Quality Gate') {
       steps {
         timeout(time: 5, unit: 'MINUTES') {
@@ -34,12 +42,22 @@ pipeline {
         }
       }
     }
+
     stage('Tests') {
-      steps { sh 'mvn -B test' }
+      steps {
+        sh 'mvn -B test'
+      }
     }
+
     stage('Docker Build & Push') {
       steps {
-        withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DH_USER', passwordVariable: 'DH_PASS')]) {
+        withCredentials([
+          usernamePassword(
+            credentialsId: 'dockerhub-creds',
+            usernameVariable: 'DH_USER',
+            passwordVariable: 'DH_PASS'
+          )
+        ]) {
           sh '''
             echo "$DH_PASS" | docker login -u "$DH_USER" --password-stdin
             docker build -t "$DH_USER/myapp:$BUILD_NUMBER" .
@@ -49,16 +67,44 @@ pipeline {
         }
       }
     }
+
+    stage('Kubernetes Connectivity Test') {
+      steps {
+        withCredentials([
+          string(
+            credentialsId: 'k8s-jenkins-token',
+            variable: 'K8S_TOKEN'
+          )
+        ]) {
+          sh '''
+            kubectl \
+              --server=https://poc3-cluster-control-plane:6443 \
+              --certificate-authority=/var/jenkins_home/cluster-ca.crt \
+              --token="$K8S_TOKEN" \
+              auth can-i get deployments -n default
+          '''
+        }
+      }
+    }
   }
+
   post {
     always {
-      junit allowEmptyResults: true, testResults: 'target/surefire-reports/*.xml'
+      junit allowEmptyResults: true,
+            testResults: 'target/surefire-reports/*.xml'
     }
+
     success {
-      script { notifySlack("SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER} - new image pushed ${env.BUILD_URL}") }
+      script {
+        notifySlack("SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER} - image pushed and Kubernetes connectivity verified ${env.BUILD_URL}")
+      }
     }
+
     failure {
-      script { notifySlack("FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER} - pipeline stopped, nothing deployed ${env.BUILD_URL}") }
+      script {
+        notifySlack("FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER} - pipeline failed ${env.BUILD_URL}")
+      }
     }
   }
 }
+```
