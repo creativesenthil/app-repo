@@ -1,3 +1,4 @@
+```groovy
 def notifySlack(String msg) {
   withCredentials([string(credentialsId: 'slack-webhook', variable: 'HOOK')]) {
     withEnv(["MSG=${msg}"]) {
@@ -76,6 +77,9 @@ pipeline {
           )
         ]) {
           sh '''
+            echo "Checking Kubernetes credential..."
+            echo "Token length: ${#K8S_TOKEN}"
+
             kubectl \
               --server=https://poc3-cluster-control-plane:6443 \
               --certificate-authority=/var/jenkins_home/cluster-ca.crt \
@@ -106,3 +110,4 @@ pipeline {
     }
   }
 }
+```
